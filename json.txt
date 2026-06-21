@@ -1,0 +1,56 @@
+{
+  "metric_zones": [
+    {
+      "name": "allocation",
+      "description": "Mesures de répartition du budget, poids des actifs et parts de capital.",
+      "examples": ["weight", "poids", "allocation", "parts", "share"]
+    },
+    {
+      "name": "performance",
+      "description": "Mesures de rendement espéré, gains, bénéfices ou profits linéaires.",
+      "examples": ["expected_return", "yield", "rendement", "gain", "profit"]
+    },
+    {
+      "name": "risk_quadratic",
+      "description": "Matrice de covariance pour le risque quadratique classique.",
+      "examples": ["Sigma", "covariance", "variance", "risk"]
+    },
+    {
+      "name": "scenarios_history",
+      "description": "Matrice des rendements ou pertes historiques par scénarios temporels.",
+      "examples": ["Scenarios", "historique", "scénarios", "trajectoires"]
+    }
+  ],
+  "objective_functions": [
+    {
+      "name": "minimize_variance",
+      "description": "Minimiser le risque quadratique global (Modèle de Markowitz).",
+      "examples": ["minimize risk", "minimiser variance", "volatility", "volatilité"]
+    },
+    {
+      "name": "maximize_return",
+      "description": "Maximiser le rendement linéaire cumulé.",
+      "examples": ["maximize return", "maximiser rendement", "bénéfice max"]
+    },
+    {
+      "name": "maximize_sharpe_ratio",
+      "description": "Maximiser le rendement ajusté du risque (Ratio de Sharpe).",
+      "examples": ["sharpe", "sharpe ratio", "ratio de sharpe", "risk-adjusted"]
+    },
+    {
+      "name": "minimize_extreme_risk",
+      "description": "Minimiser le pire des scénarios ou la baisse maximale historique (Maximum Drawdown).",
+      "examples": ["maximum drawdown", "mdd", "worst-case", "pire scenario", "drawdown max"]
+    },
+    {
+      "name": "minimize_mad",
+      "description": "Minimiser l'écart absolu moyen (Mean Absolute Deviation - MAD).",
+      "examples": ["mad", "mean absolute deviation", "ecart absolu moyen", "deviation absolue"]
+    },
+    {
+      "name": "minimize_turnover",
+      "description": "Minimiser la rotation ou la distance absolue par rapport au portefeuille initial x0.",
+      "examples": ["turnover", "rotation", "rebalancing", "coût de transaction"]
+    }
+  ]
+}
