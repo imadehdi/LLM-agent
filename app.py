@@ -141,39 +141,80 @@ if uploaded_file is not None:
 
         # --- STEP C : RESTITUTION GRAPHIQUE ---
         if result["success"]:
-            st.success("Optimal solution found successfully!")
             
-            m1, m2 = st.columns(2)
-            m1.metric("Solver Status", result["status"])
-            m2.metric("Final Objective Value", f"{result['objective']:.6f}")
-
-            df_results = df_data.copy()
-            df_results["Optimal_Result_x"] = result["x_values"]
-            df_results["Optimized_Percentage"] = df_results["Optimal_Result_x"] * 100
-
-            tab_col, chart_col = st.columns([1, 1])
-
-            with tab_col:
-                st.subheader("Final Allocation")
-                df_display = df_results.copy()
-                df_display["Optimal_Result_x"] = df_display["Optimized_Percentage"].map("{:.2f}%".format)
-                st.dataframe(df_display, use_container_width=True, hide_index=True)
-
-            with chart_col:
-                st.subheader("Decision Visualization")
+            # CAS 1 : FRONTIÈRE DE PARETO
+            if result.get("type") == "pareto":
+                st.success(f"Pareto Frontier generated with {len(result['pareto_points'])} optimal portfolios!")
+                
+                # 1. Préparation des données pour Plotly
+                pareto_data = result["pareto_points"]
+                risks = [p["risk"] * 100 for p in pareto_data]
+                returns = [p["return"] * 100 for p in pareto_data]
+                
+                df_pareto = pd.DataFrame({
+                    "Risk (%)": risks,
+                    "Expected Return (%)": returns
+                })
+                
+                # Ajout des poids exacts pour les bulles d'information (Tooltip)
                 first_col = df_data.columns[0]
-                fig = px.pie(
-                    df_results, 
-                    values="Optimal_Result_x", 
-                    names=first_col,
-                    hole=0.4,
-                    color_discrete_sequence=px.colors.sequential.YlGnBu_r
+                asset_names = df_data[first_col].tolist()
+                for i, asset in enumerate(asset_names):
+                    df_pareto[f"Weight_{asset} (%)"] = [p["weights"][i] * 100 for p in pareto_data]
+
+                # 2. Tracé Interactif de la Courbe
+                fig = px.line(
+                    df_pareto, 
+                    x="Risk (%)", 
+                    y="Expected Return (%)", 
+                    markers=True,
+                    hover_data=[f"Weight_{asset} (%)" for asset in asset_names],
+                    title="Pareto Frontier (Risk vs Return)"
                 )
-                fig.update_layout(margin=dict(t=15, b=15, l=15, r=15))
+                fig.update_traces(
+                    marker=dict(size=12, color="orange", line=dict(width=2, color="DarkSlateGrey")),
+                    line=dict(color="royalblue", width=3)
+                )
                 st.plotly_chart(fig, use_container_width=True)
                 
-        else:
-            st.error(f"The solver failed to find a solution. Status: {result['status']}. Error: {result['error']}")
+                # 3. Tableau détaillé caché dans un menu déroulant
+                with st.expander("View detailed weights for all portfolios"):
+                    st.dataframe(df_pareto.style.format("{:.2f}"), use_container_width=True)
 
+            # CAS 2 : OPTIMISATION CLASSIQUE (1 SEUL PORTEFEUILLE)
+            else:
+                st.success("Optimal solution found successfully!")
+                
+                m1, m2 = st.columns(2)
+                m1.metric("Solver Status", result.get("status", "OK"))
+                m2.metric("Final Objective Value", f"{result.get('objective', 0):.6f}")
+
+                df_results = df_data.copy()
+                df_results["Optimal_Result_x"] = result["x_values"]
+                df_results["Optimized_Percentage"] = df_results["Optimal_Result_x"] * 100
+
+                tab_col, chart_col = st.columns([1, 1])
+
+                with tab_col:
+                    st.subheader("Final Allocation")
+                    df_display = df_results.copy()
+                    df_display["Optimal_Result_x"] = df_display["Optimized_Percentage"].map("{:.2f}%".format)
+                    st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+                with chart_col:
+                    st.subheader("Decision Visualization")
+                    first_col = df_data.columns[0]
+                    fig = px.pie(
+                        df_results, 
+                        values="Optimal_Result_x", 
+                        names=first_col,
+                        hole=0.4,
+                        color_discrete_sequence=px.colors.sequential.YlGnBu_r
+                    )
+                    fig.update_layout(margin=dict(t=15, b=15, l=15, r=15))
+                    st.plotly_chart(fig, use_container_width=True)
+                
+        else:
+            st.error(f"The solver failed to find a solution. Status: {result.get('status', 'Error')}. Error: {result.get('error', 'Unknown')}")
 else:
     st.info("Waiting for an Excel file. Upload a .xlsx file to start the interface.")
