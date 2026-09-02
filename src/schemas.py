@@ -1,6 +1,6 @@
 from __future__ import annotations
 from enum import Enum
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Dict, Any
 from pydantic import BaseModel, Field
 
 class ProblemType(str, Enum):
@@ -9,22 +9,39 @@ class ProblemType(str, Enum):
     UNKNOWN = "unknown"
 
 class ObjectiveConfig(BaseModel):
-    type: Literal["linear", "quadratic", "ratio", "minimax", "mad", "turnover"] = Field(..., description="Mathematical type of the objective function.")
-    target_name: str = Field(..., description="The exact name of the data column or input matrix to optimize.")
-    secondary_target_name: str = Field(default="", description="The name of the secondary input matrix or column (required for ratio, else '').")
-    variable_name: str = Field("x", description="Nom de la variable de décision à utiliser dans l'objectif")
-    direction: Literal["min", "max"]
+    type: Literal[
+        "linear", 
+        "quadratic", 
+        "ratio", 
+        "minimax", 
+        "mad", 
+        "turnover", 
+        "risk_budgeting", 
+        "cvar", 
+        "pareto_frontier",
+        "tracking_error"   
+    ] = Field(..., description="Type of objective function")
+    target_name: Optional[str] = None
+    secondary_target_name: Optional[str] = None
+    variable_name: str = "x"
+    direction: Literal["min", "max"] = "min"
+    
+    target_1: Optional[Dict[str, Any]] = Field(default=None, description="Premier objectif (ex: Maximiser le rendement)")
+    target_2: Optional[Dict[str, Any]] = Field(default=None, description="Deuxième objectif (ex: Minimiser le risque)")
+    points: int = Field(default=20, description="Nombre de portefeuilles à générer sur la frontière")
+    
+    # AJOUT : L'intention analytique du LLM
+    highlight_metric: Optional[str] = Field(default="", description="The specific metric to highlight on a Pareto frontier (e.g., 'sharpe', 'knee_point', 'min_risk', 'max_return').")
 
 class DecisionVariable(BaseModel):
     name: str = Field(..., description="Nom symbolique de la variable (ex: 'x')")
     size: Literal["n_rows", "scalar"] = Field(..., description="Taille de la variable")
-    # NOUVEAU : Spécification du domaine de la variable pour le monde discret
-    type: Literal["continuous", "binary", "integer"] = Field(default="continuous", description="Domaine mathématique de la variable (continu, binaire ou entier)")
+    type: Literal["continuous", "binary", "integer"] = Field(default="continuous", description="Domaine mathématique de la variable")
 
 class GenericConstraint(BaseModel):
     applied_to: str = Field(..., description="Nom de la variable de décision impactée (ex: 'x' ou 'b')")
     attribute: str = Field(..., description="Nom exact de la colonne du tableau, ou 'sum_all', ou 'element'")
-    targets: List[str] = Field(default_factory=list, description="Valeurs textuelles ciblées si colonne catégorielle. Sinon vide.")
+    targets: List[str] = Field(default_factory=list, description="Valeurs textuelles ciblées si colonne catégorielle.")
     bound_type: Literal["eq", "max", "min", "range"]
     value: Optional[float] = None
     min_value: Optional[float] = None

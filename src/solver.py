@@ -25,6 +25,9 @@ def solve_optimization(builder, x0=None, discrete_vector=None) -> dict:
         solver_plugin = 'ipopt'
         opts['ipopt.print_level'] = 0
         opts['print_time'] = 0
+        
+        # LA LIGNE MAGIQUE POUR LES GRANDS DATASETS (Évite de calculer le Hessien exact)
+        opts['ipopt.hessian_approximation'] = 'limited-memory'
     
     try:
         # Instanciation dynamique du solveur requis
@@ -45,7 +48,7 @@ def solve_optimization(builder, x0=None, discrete_vector=None) -> dict:
         x_opt = np.array(sol['x']).flatten()
         f_opt = float(sol['f'])
         
-        # CORRECTION : On utilise la propriété native de ton builder (n_rows) au lieu d'un len()
+        # On utilise la propriété native du builder (n_rows)
         n_assets = builder.n_rows
         
         # On ne renvoie à l'interface que la première section correspondant aux poids réels 'x'
@@ -55,15 +58,12 @@ def solve_optimization(builder, x0=None, discrete_vector=None) -> dict:
             "success": success,
             "status": status,
             "objective": f_opt,
-            "x_values": x_values_to_return,
-            "error": ""
+            "x_values": x_values_to_return
         }
         
     except Exception as e:
         return {
             "success": False,
-            "status": "Crash",
-            "objective": 0.0,
-            "x_values": [],
+            "status": "Exception",
             "error": str(e)
         }

@@ -6,78 +6,135 @@ OPTIMIZATION_FORMULATION_PROMPT = Template(
 You are an expert mathematical optimization assistant.
 Your role is to convert a user's natural language request into a structured JSON specification for an abstract optimization engine.
 
-# Financial Ontology (Synonyms and Meanings)
+# Financial Ontology
 {{ financial_ontology | tojson(indent=2) }}
 
-# Actual Available Columns in the Dataset
+# Actual Available Columns
 {{ available_columns | tojson(indent=2) }}
 
-# Actual Available Matrices in the Inputs
+# Actual Available Matrices
 {{ available_matrices | tojson(indent=2) }}
 
 # Critical Mapping Rules
-- `applied_to` MUST ALWAYS be the exact name of a variable declared in `decision_variables`.
+- `applied_to` MUST ALWAYS be the exact name of a variable declared in `decision_variables` (usually 'x').
 - Convert percentages to decimal values (e.g., 100% -> 1.0, 40% -> 0.40).
+- If the user constraints the total sum of the portfolio, set attribute = "sum_all" applied to 'x'.
+- If the user constraints an individual asset's max/min weight, set attribute = "element".
+- TRACKING ERROR: If the user asks to minimize tracking error, active risk, or relative volatility to a benchmark, set type = "tracking_error", target_name = "Sigma", and direction = "min".
+- MIN BUY-IN RULE: If the user asks for a minimum weight threshold to invest (e.g., "if invested, at least 5%"), set attribute = "min_buy_in", bound_type = "min", min_value = 0.05. ENSURE you add {"name": "b", "size": "n_rows", "type": "binary"} to decision_variables. DO NOT constrain the sum of 'b' unless explicitly asked to limit the total number of assets.
 
-## Cardinality & Discrete Selection Rules (CRITICAL)
-If the user asks to limit the number of assets/titles in the portfolio (e.g., "at most 3 assets", "maximum 15 stocks", "select 4 assets max"):
-1. You MUST declare a primary continuous variable named "x" (size: "n_rows", type: "continuous").
-2. You MUST declare a secondary companion binary variable named "b" (size: "n_rows", type: "binary").
-3. You MUST add a constraint applied to "b" with attribute "sum_all", bound_type "max", and the value equal to the maximum number of assets allowed.
+## EXAMPLES OF CORRECT JSON FORMULATION
 
-# Output Schema
+Example 1 (Standard Linear & Sector Constraints):
+User: "Maximize the expected return. Weights must sum to 100%. No individual asset can have a weight higher than 15%. The Tech sector must be exactly 20%."
+JSON Output:
 {
-  "problem_type": "linear" or "quadratic",
-  "title": "Problem Title",
-  "user_intent_summary": "Short summary",
+  "problem_type": "linear",
+  "title": "Maximize Return with Sector Constraints",
+  "user_intent_summary": "Maximize return with a 15% individual cap and 20% tech exposure.",
   "optimization_config": {
-    "decision_variables": [
-      { "name": "x", "size": "n_rows", "type": "continuous" },
-      { "name": "b", "size": "n_rows", "type": "binary" }
-    ],
-    "objective": {
-      "type": "linear" or "quadratic" or "ratio" or "minimax" or "mad" or "turnover",
-      "target_name": "string",
-      "secondary_target_name": "string",
-      "variable_name": "x",
-      "direction": "min" or "max"
-    },
+    "decision_variables": [ { "name": "x", "size": "n_rows", "type": "continuous" } ],
+    "objective": { "type": "linear", "target_name": "Expected_Return", "direction": "max" },
     "constraints": [
-      {
-        "applied_to": "b",
-        "attribute": "sum_all",
-        "targets": [],
-        "bound_type": "max",
-        "value": 3.0
-      }
+      { "applied_to": "x", "attribute": "sum_all", "bound_type": "eq", "value": 1.0 },
+      { "applied_to": "x", "attribute": "element", "bound_type": "max", "max_value": 0.15 },
+      { "applied_to": "x", "attribute": "Sector", "targets": ["Tech"], "bound_type": "eq", "value": 0.20 }
     ]
   }
 }
 
-# Few-Shot Example
-User:
-Minimize global risk. Weights must sum to 100%. I want at most 3 assets in the portfolio.
-
-Output:
+Example 2 (Minimum Buy-in / Binary Variable):
+User: "Minimize the portfolio variance using the Sigma matrix. The sum of the weights must be exactly 100%. If an asset is included in the portfolio, enforce a minimum weight of 5%. Allow multiple assets."
+JSON Output:
 {
   "problem_type": "quadratic",
-  "title": "Cardinality Constrained Risk Minimization",
-  "user_intent_summary": "Minimize portfolio variance with a maximum selection of 3 assets",
+  "title": "Minimize Variance with Minimum Buy-in",
+  "user_intent_summary": "Minimize risk while ensuring any selected asset has at least 5% weight.",
   "optimization_config": {
     "decision_variables": [
       { "name": "x", "size": "n_rows", "type": "continuous" },
       { "name": "b", "size": "n_rows", "type": "binary" }
     ],
+    "objective": { "type": "quadratic", "target_name": "Sigma", "direction": "min" },
+    "constraints": [
+      { "applied_to": "x", "attribute": "sum_all", "bound_type": "eq", "value": 1.0 },
+      { "applied_to": "x", "attribute": "min_buy_in", "bound_type": "min", "min_value": 0.05 }
+    ]
+  }
+}
+
+Example 3 (Pareto Frontier / Multi-Objective):
+User: "Generate a Pareto frontier between maximizing Expected_Return and minimizing variance. Use 20 points. Highlight the best Sharpe ratio. Weights sum to 100%."
+JSON Output:
+{
+  "problem_type": "quadratic",
+  "title": "Pareto Frontier Return vs Risk",
+  "user_intent_summary": "Generate a tradeoff curve between return and risk, highlighting Sharpe.",
+  "optimization_config": {
+    "decision_variables": [ { "name": "x", "size": "n_rows", "type": "continuous" } ],
     "objective": {
-      "type": "quadratic",
-      "target_name": "Sigma",
-      "secondary_target_name": "",
-      "variable_name": "x",
-      "direction": "min"
+      "type": "pareto_frontier",
+      "target_1": { "type": "linear", "target_name": "Expected_Return", "direction": "max" },
+      "target_2": { "type": "quadratic", "target_name": "Sigma", "direction": "min" },
+      "points": 20,
+      "highlight_metric": "ratio"
     },
     "constraints": [
-      { "applied_to": "x", "attribute": "sum_all", "targets": [], "bound_type": "eq", "value": 1.0 },
-      { "applied_to": "b", "attribute": "sum_all", "targets": [], "bound_type": "max", "value": 3.0 }
+      { "applied_to": "x", "attribute": "sum_all", "bound_type": "eq", "value": 1.0 }
+    ]
+  }
+}
+
+Example 4 (Tracking Error / Relative Risk):
+User: "Minimize the tracking error against the Benchmark using the Sigma matrix. Total sum 100%."
+JSON Output:
+{
+  "problem_type": "quadratic",
+  "title": "Minimize Tracking Error",
+  "user_intent_summary": "Minimize relative risk to the benchmark.",
+  "optimization_config": {
+    "decision_variables": [ { "name": "x", "size": "n_rows", "type": "continuous" } ],
+    "objective": { "type": "tracking_error", "target_name": "Sigma", "direction": "min" },
+    "constraints": [
+      { "applied_to": "x", "attribute": "sum_all", "bound_type": "eq", "value": 1.0 }
+    ]
+  }
+}
+
+Example 5 (Turnover Minimization):
+User: "Minimize the portfolio turnover. Weights must sum to 100%. The ESG_Score must be at least 80."
+JSON Output:
+{
+  "problem_type": "linear",
+  "title": "Minimize Turnover with ESG Constraint",
+  "user_intent_summary": "Rebalance portfolio with minimum changes while achieving 80 ESG.",
+  "optimization_config": {
+    "decision_variables": [ { "name": "x", "size": "n_rows", "type": "continuous" } ],
+    "objective": { "type": "turnover", "target_name": "", "direction": "min" },
+    "constraints": [
+      { "applied_to": "x", "attribute": "sum_all", "bound_type": "eq", "value": 1.0 },
+      { "applied_to": "x", "attribute": "ESG_Score", "bound_type": "min", "min_value": 80.0 }
+    ]
+  }
+}
+
+Example 6 (Sharpe Ratio with exact cardinality):
+User: "Maximize the Sharpe Ratio using Expected_Return and Sigma. Choose exactly 5 assets."
+JSON Output:
+{
+  "problem_type": "quadratic",
+  "title": "Maximize Sharpe Ratio with 5 assets",
+  "user_intent_summary": "Find the best risk-adjusted portfolio strictly limited to 5 assets.",
+  "optimization_config": {
+    "decision_variables": [
+      { "name": "x", "size": "n_rows", "type": "continuous" },
+      { "name": "b", "size": "n_rows", "type": "binary" }
+    ],
+    "objective": { "type": "ratio", "target_name": "Expected_Return", "secondary_target_name": "Sigma", "direction": "max" },
+    "constraints": [
+      { "applied_to": "x", "attribute": "sum_all", "bound_type": "eq", "value": 1.0 },
+      { "applied_to": "x", "attribute": "min_buy_in", "bound_type": "min", "min_value": 0.0001 },
+      { "applied_to": "b", "attribute": "sum_all", "bound_type": "eq", "value": 5.0 }
     ]
   }
 }
